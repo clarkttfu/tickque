@@ -1,24 +1,19 @@
 const Denque = require('denque')
 
-class TimerQueue {
+module.exports = class {
   /**
-   * @param {Number} interval >=1 in seconds
-   * @param {Number} length default (init) queue length
-   * @param {Number} limit the maximum queue length, >=1
-   * @param {Function} hash to override default simple implementation
+   * @param {Number} interval >=0.001 in seconds
+   * @param {Number} limit the maximum queue length, defaults 0 = no limit
    */
-  constructor (interval = 1, length = 10, limit, hash) {
-    this._interval = interval >= 0.2 ? interval : 0.2 // seconds
-    this._limit = limit >= 1 ? limit : Math.ceil(30 * 60 / this._interval) // 30 mins
-    this._items = new Map()
-    this._trace = new Map()
-    if (typeof hash === 'function') {
-      this.hash = hash
-    }
-    this._timer = null
-    this._callbacks = new Set()
+  constructor (interval = 1, limit = 0, allocLimit = false) {
+    this._interval = interval >= 0.001 ? interval : 0.001 // seconds
+    this._limit = limit > 0 ? limit : 0
+    this._map = new Map()
     this._queue = new Denque()
-    while (this._queue.length < length) {
+    this._callbacks = new Set()
+    this._timer = undefined
+
+    while (allocLimit && this._queue.length < limit) {
       this._queue.push(new Set())
     }
   }
@@ -31,16 +26,7 @@ class TimerQueue {
   }
 
   /**
-   * Simple function to create hash tag for items.
-   * @param {Object} item
-   * @returns {Object} tag that is used to track the item for fast deletion
-   */
-  hash (item) {
-    return item
-  }
-
-  /**
-   * @param {Function} callback is called on tick with items in the shifted(first) bucket
+   * @param {Function} callback will be called with shifted items Iterator on tick
    */
   onShift (callback /* (shifted {Set}) => {} */) {
     if (typeof callback === 'function') {
@@ -50,26 +36,21 @@ class TimerQueue {
   }
 
   tick () {
-    this._queue.push(new Set())
     const bucket = this._queue.shift()
-    if (bucket.size > 0) {
-      const items = this._items
-      const shifted = Array.from(bucket)
-      this._callbacks.forEach(cb => {
-        try { cb(shifted) } catch (err) {}
-      })
-      this._trace.forEach((v, k, map) => { // TODO: this could be slow
-        if (v.delete(bucket) && v.size === 0) {
-          map.delete(k)
-          items.delete(k)
-        }
-      })
+    if (bucket && bucket.size > 0) {
+      const shifted = bucket.values()
+      for (let cb of this._callbacks) {
+        try { cb(shifted, bucket.size) } catch (err) {}
+      }
+      for (let item of bucket) {
+        this._map.delete(item)
+      }
     }
-    if (this._trace.size < 1) this.stop() // autostop
+    if (this._map.size < 1) this.stop() // autostop
   }
 
-  start (immediate = false) {
-    if (immediate) this.tick()
+  start (tickNow = false) {
+    if (tickNow) this.tick()
     if (!this._timer) {
       this._timer = setInterval(this.tick.bind(this), this._interval * 1000)
     }
@@ -85,59 +66,72 @@ class TimerQueue {
 
   /**
    * @param {*} item to be put into specific queue bucket
-   * @param {Number} ttl tick to survive
-   * @returns {Boolean} true if item is added or it replaces existing one
+   * @param {Number} ttl tick to live, >=1 or defaults to limit
+   * @returns {Boolean} true if item is added successfully
    */
   add (item, ttl) {
-    if (ttl === undefined || (ttl > 0 && ttl <= this._limit)) {
-      while (ttl > this._queue.length) {
-        this._queue.push(new Set())
-      }
-      let index = ttl > 0 ? ttl - 1 : -1
-      let tag = this.hash(item)
-      let bucket = this._queue.peekAt(index).add(item)
-      let tracking = this._trace.get(tag) || new Set()
-      this._trace.set(tag, tracking.add(bucket))
-      this._items.set(tag, item)
-      this.start()
+    if (item === undefined || ttl < 1) return false
+    if (ttl > (this._limit || ttl || 1)) return false
+
+    let index = -1
+    let length = this._limit || 1
+    if (ttl > 0) {
+      index = ttl - 1
+      length = ttl
+    }
+    while (this._queue.length < length) {
+      this._queue.push(new Set())
+    }
+    if (this._map.has(item)) {
+      this._map.get(item).delete(item)
+    }
+    let bucket = this._queue.peekAt(index).add(item)
+    this._map.set(item, bucket)
+    this.start()
+    return true
+  }
+
+  /**
+   * @param {Number} [ttl] the time bucket to be returned, defaults to the first bucket
+   * @returns {Iterator} time bucket items
+   */
+  peek (ttl) {
+    if (ttl > this.length || ttl < 1) return
+    return this._queue.peekAt(ttl - 1).values()
+  }
+
+  /**
+   * @param {*} item that is to be removed
+   * @returns {Boolean} true if the queue contains item
+   */
+  remove (item) {
+    if (this.has(item)) {
+      this._map.get(item).delete(item)
+      this._map.delete(item)
+      if (this._map.size < 1) this.stop() // autostop
       return true
     }
     return false
   }
 
   /**
-   * @param {Number} [ttl] the time bucket to be returned, defaults to the first bucket
-   * @returns {Set} time bucket
-   */
-  peek (ttl) {
-    return this._queue.peekAt(ttl > 0 ? ttl - 1 : 0)
-  }
-
-  /**
-   * @param {*} item that is to be removed
-   * @returns {Boolean} true if the queue contains items of the given tag
-   */
-  remove (item) {
-    let tag = this.hash(item)
-    Array.from(this._trace.get(tag) || []).forEach(bucket => {
-      bucket.forEach(value => item === value && bucket.delete(value))
-    })
-    let ifDeleted = this._trace.delete(tag)
-    this._items.delete(tag)
-    if (this._trace.size < 1) this.stop() // autostop
-    return ifDeleted
-  }
-
-  /**
    * @returns {Boolean} whether contains the given item
    */
   has (item) {
-    return this._trace.has(this.hash(item))
+    return this._map.has(item)
   }
 
+  /**
+   * @returns {Iterator} all the items
+   */
   items () {
-    return this._items.values()
+    return this._map.keys()
+  }
+
+  /**
+   * @return {Number} count number of all items in queue
+   */
+  count () {
+    return this._map.size
   }
 }
-
-module.exports = TimerQueue
