@@ -3,7 +3,7 @@ A queue that auto shift itself based on the given interval.
 
 - You might not want to create timer for each incoming request.
 - The queue is designed to align those requests into `time slots`.
-- When each time slot is shifted, so requests could be processed in batch.
+- When each time slot is shifted, process requests in the slot in batch.
 
 ## Get started
 
@@ -24,7 +24,7 @@ queue.add('shifted after 2 sec'), 2)
 - limit: maximum ttl (queue length), which make it fixed length
 - preAlloc: alloc slots during construction if `limit` > 0
 
-**Note: It's possible to set `interval` to float point but the queue uses `setInterval` which cannot make pricise timers. There will be ms delays (depending on CPU usage) before each `onShift` callback due to single thread JS model. `setTimeout` may be better but it's not reliable because we need to reference system time (which could be changed) during runtime. It's roughly 1 second error every 8 minutes**
+**Note: It's possible to set `interval` to float point but the queue uses `setInterval` which cannot guarantee pricise timers. There will be ms delays (depending on CPU usage) before each `onShift` callback due to single thread JS model. It's roughly 1 second error every 8 minutes**
 
 ### onShift(cb)
 - `cb` will be invoked with the items iterator in the shifted time slot
@@ -33,32 +33,33 @@ queue.add('shifted after 2 sec'), 2)
 - item: the object to be inserted into the `ttl` specified time slot
 - ttl: tick to live -- time slot offset (positive integer)
 
-The queue will grow automatically until `limit` is reached if ttl is larger than current queue length.
-If ttl is omitted, item will be added to the end of queue.  
-This is true even when the length of queue is less than `limit`.
+The queue grows automatically until `limit`, if `ttl` is larger than current queue length.
+This is one time `O(n)` operation, `n` equals the length of queue.
+When queue is contructred with `preAlloc`, complexity is always `O(1)`.
+If `ttl` is omitted, item is added to the end of queue.
 
 ### peek(ttl)
-Returns the items in the given time slot.
+Returns the items in the given time slot in `O(1)`. 
 
 ### remove(item)
-Remove the given item.
+Remove the given item in `O(1)`.
 
 ### has(item)
-Check if the item is in the queue.
+Check if the item is in the queue in `O(1)`.
 
 ### length
-Returns the queue length.
+Returns the queue length in `O(1)`.
+
+### items()
+Returns iterator of all items in `O(1)`.
+
+### count()
+Returns number of all items in `O(1)`.
 
 ### start(immediate = false)
 - immediate: tick at once if true, otherwise tick after `interval`
 
-Start queue shifting. *Note the queue will start automatically when item is added.*
+Start queue shifting. *Note the queue starts automatically when item is added.*
 
 ### stop()
-Stop queue shifting. *Note the queue will stop automatically once it's empty.*
-
-### items()
-Returns iterator of all items.
-
-### count()
-Returns number of all items.
+Stop queue shifting. *Note the queue stops automatically once it's empty.*

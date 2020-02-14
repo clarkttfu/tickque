@@ -5,7 +5,7 @@ module.exports = class {
    * @param {Number} interval >=0.001 in seconds
    * @param {Number} limit the maximum queue length, defaults 0 = no limit
    */
-  constructor (interval = 1, limit = 0, allocLimit = false) {
+  constructor (interval = 1, limit = 0, preAlloc = false) {
     this._interval = interval >= 0.001 ? interval : 0.001 // seconds
     this._limit = limit > 0 ? limit : 0
     this._map = new Map()
@@ -13,8 +13,10 @@ module.exports = class {
     this._callbacks = new Set()
     this._timer = undefined
 
-    while (allocLimit && this._queue.length < limit) {
-      this._queue.push(new Set())
+    if (preAlloc) {
+      while (this._queue.length < limit) {
+        this._queue.push(new Set())
+      }
     }
   }
 
@@ -39,10 +41,10 @@ module.exports = class {
     const bucket = this._queue.shift()
     if (bucket && bucket.size > 0) {
       const shifted = bucket.values()
-      for (let cb of this._callbacks) {
+      for (const cb of this._callbacks) {
         try { cb(shifted, bucket.size) } catch (err) {}
       }
-      for (let item of bucket) {
+      for (const item of bucket) {
         this._map.delete(item)
       }
     }
@@ -65,6 +67,7 @@ module.exports = class {
   }
 
   /**
+   * O(1)
    * @param {*} item to be put into specific queue bucket
    * @param {Number} ttl tick to live, >=1 or defaults to limit
    * @returns {Boolean} true if item is added successfully
@@ -85,13 +88,14 @@ module.exports = class {
     if (this._map.has(item)) {
       this._map.get(item).delete(item)
     }
-    let bucket = this._queue.peekAt(index).add(item)
+    const bucket = this._queue.peekAt(index).add(item)
     this._map.set(item, bucket)
     this.start()
     return true
   }
 
   /**
+   * O(1)
    * @param {Number} [ttl] the time bucket to be returned, defaults to the first bucket
    * @returns {Iterator} time bucket items
    */
@@ -101,6 +105,7 @@ module.exports = class {
   }
 
   /**
+   * O(1)
    * @param {*} item that is to be removed
    * @returns {Boolean} true if the queue contains item
    */
@@ -108,13 +113,16 @@ module.exports = class {
     if (this.has(item)) {
       this._map.get(item).delete(item)
       this._map.delete(item)
-      if (this._map.size < 1) this.stop() // autostop
+      if (this._map.size < 1) {
+        this.stop() // autostop
+      }
       return true
     }
     return false
   }
 
   /**
+   * O(1)
    * @returns {Boolean} whether contains the given item
    */
   has (item) {
@@ -122,6 +130,7 @@ module.exports = class {
   }
 
   /**
+   * O(1)
    * @returns {Iterator} all the items
    */
   items () {
@@ -129,6 +138,7 @@ module.exports = class {
   }
 
   /**
+   * O(1)
    * @return {Number} count number of all items in queue
    */
   count () {

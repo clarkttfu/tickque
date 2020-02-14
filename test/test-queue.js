@@ -20,9 +20,10 @@ describe('Test TickQueue methods', () => {
     should(q.length).equal(0)
   })
 
-  it('onShift avoid duplicate callbacks', () => {
+  it('onShift avoid duplicate and invalid callbacks', () => {
     var q = new Queue()
     var noop = () => {}
+    q.onShift({})
     q.onShift(noop)
     q.onShift(noop)
     should(q._callbacks.size).equal(1)
@@ -126,5 +127,15 @@ describe('Test TickQueue methods', () => {
     should(q.length).equal(3)
     should(q.count()).equal(0)
     q.stop()
+  })
+
+  it('remove to auto stop', () => {
+    var q = new Queue()
+    should(q.add(1)).be.true()
+    should(q.add(2)).be.true()
+    should(q._timer).be.ok()
+    should(q.remove(2)).be.true()
+    should(q.remove(1)).be.true()
+    should(q._timer).be.undefined()
   })
 })
