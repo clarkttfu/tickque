@@ -1,11 +1,11 @@
 {
   "name": "tickque",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "auto shifting queue based on denque",
   "main": "index.js",
   "scripts": {
-    "test": "nyc mocha",
-    "test-report": "nyc mocha && nyc report --reporter=html"
+    "test": "tape test/**/*.js",
+    "coverage": "nyc tape test/**/*.js | tap-nyc"
   },
   "keywords": [
     "timer",
@@ -19,8 +19,8 @@
   },
   "devDependencies": {
     "nyc": "^13.1.0",
-    "mocha": "^6.1.3",
-    "should": "^13.2.3"
+    "tap-nyc": "^1.0.3",
+    "tape": "^5.5.3"
   },
   "dependencies": {
     "denque": "^1.4.1"

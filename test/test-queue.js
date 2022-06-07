@@ -1,141 +1,158 @@
-const should = require('should')
+const test = require('tape')
 const Queue = require('../index')
 
-describe('Test TickQueue methods', () => {
-  it('default constructor', () => {
+test('Constructor', t => {
+  t.test ('default constructor', st => {
     var q = new Queue()
-    should(q._interval).equal(1)
-    should(q._limit).equal(0)
-    should(q._timer).be.undefined()
-    should(q._callbacks.size).equal(0)
-    should(q.length).equal(0)
+    st.equal(q._interval, 1, 'q._interval')
+    st.equal(q._limit, 0, 'q._limit')
+    st.equal(q._timer, undefined, 'q._timer')
+    st.equal(q._callbacks.size, 0, 'q._callbacks.size')
+    st.equal(q.length, 0, 'q.length')
+    st.end()
   })
 
-  it('construct with params', () => {
+  t.test('construct with params', st => {
     var q = new Queue(7, 2)
-    should(q._interval).equal(7)
-    should(q._limit).equal(2)
-    should(q._timer).be.undefined()
-    should(q._callbacks.size).equal(0)
-    should(q.length).equal(0)
+    st.equal(q._interval, 7)
+    st.equal(q._limit, 2)
+    st.equal(q._timer, undefined)
+    st.equal(q._callbacks.size, 0)
+    st.equal(q.length, 0)
+    st.end()
   })
+})
 
-  it('onShift avoid duplicate and invalid callbacks', () => {
+
+test('Test TickQueue methods', t => {
+
+  t.test('onShift avoid duplicate and invalid callbacks', st => {
     var q = new Queue()
     var noop = () => {}
     q.onShift({})
     q.onShift(noop)
     q.onShift(noop)
-    should(q._callbacks.size).equal(1)
-    should(q.length).equal(0)
+    st.equal(q._callbacks.size, 1, 'q._callbacks.size')
+    st.equal(q.length, 0, 'q.length')
+    st.end()
   })
 
-  it('add nothing if item is undefined', () => {
+  t.test('add nothing if item is undefined', st => {
     var q = new Queue()
-    should(q.add()).be.false()
-    should(q.add(undefined, 1)).be.false()
-    should(q.length).equal(0)
+    st.notOk(q.add(), 'q.add()')
+    st.notOk(q.add(undefined, 1), 'q.add(undefined, 1)')
+    st.equal(q.length, 0, 'q.length')
+    st.end()
   })
 
-  it('add nothing if ttl <= 0', () => {
+  t.test('add nothing if ttl <= 0', st => {
     var q = new Queue()
-    should(q.add(null, 0)).be.false()
-    should(q.add(null, -1)).be.false()
-    should(q.length).equal(0)
+    st.notOk(q.add(null, 0), 'q.add(null, 0)')
+    st.notOk(q.add(null, -1), 'q.add(null, -1)')
+    st.equal(q.length, 0, 'q.length')
+    st.end()
   })
 
-  it('add nothing if ttl > limit', () => {
+  t.test('add nothing if ttl > limit', st => {
     var q = new Queue(1, 2)
-    should(q.add(null, 3)).be.false()
-    should(q.length).equal(0)
+    st.notOk(q.add(null, 3))
+    st.equal(q.length, 0, 'q.length')
+    st.end()
   })
 
-  it('add to the end of queue, without growing', () => {
+  t.test('add to the end of queue, without growing', st => {
     var q = new Queue()
     var i = 0
-    while (i < 10000) {
-      should(q.add(++i)).be.true()
-      should(q.length).equal(1)
-      should(q.count()).equal(i)
+    while (i < 1000) {
+      st.ok(q.add(++i))
+      st.equal(q.length, 1, 'q.length == 1')
+      st.equal(q.count(), i, 'q.count == i')
     }
     q.stop()
+    st.end()
   })
 
-  it('add to the end of limited queue', () => {
+  t.test('add to the end of limited queue', st => {
     var q = new Queue(1, 5)
     var i = 0
     while (i < 20) {
-      should(q.add(++i)).be.true()
-      should(q.length).equal(5)
-      should(new Set(q.peek(5)).size).equal(i)
-      should(q.count()).equal(i)
+      st.ok(q.add(++i))
+      st.equal(q.length, 5)
+      st.equal(new Set(q.peek(5)).size, i)
+      st.equal(q.count(), i)
     }
     q.stop()
+    st.end()
   })
 
-  it('add and grow dynamically', () => {
+  t.test('add and grow dynamically', st => {
     var q = new Queue()
     var i = 0
-    while (i < 10000) {
-      should(q.add(++i, i)).be.true()
-      should(q.length).equal(i)
-      should(q.count()).equal(i)
+    while (i < 1000) {
+      st.ok(q.add(++i, i))
+      st.equal(q.length, i)
+      st.equal(q.count(), i)
     }
     q.stop()
+    st.end()
   })
 
-  it('add with new ttl', () => {
+  t.test('add with new ttl', st => {
     var q = new Queue()
     q.add(1, 2)
-    q._queue.peekAt(0).has(1).should.be.false()
-    q._queue.peekAt(1).has(1).should.be.true()
+    st.notOk(q._queue.peekAt(0).has(1))
+    st.ok(q._queue.peekAt(1).has(1))
     q.add(1) // to the end of queue: ttl=2
-    q._queue.peekAt(0).has(1).should.be.false()
-    q._queue.peekAt(1).has(1).should.be.true()
+    st.notOk(q._queue.peekAt(0).has(1))
+    st.ok(q._queue.peekAt(1).has(1))
     q.add(1, 1)
-    q._queue.peekAt(0).has(1).should.be.true()
-    q._queue.peekAt(1).has(1).should.be.false()
-    should(q.peek(3)).be.undefined()
+    st.ok(q._queue.peekAt(0).has(1))
+    st.notOk(q._queue.peekAt(1).has(1))
+    st.equal(q.peek(3), undefined)
     q.stop()
+    st.end()
   })
 
-  it('add and grow with limit', () => {
+  t.test('add and grow with limit', st => {
     var q = new Queue(1, 2)
-    should(q.length).equal(0)
-    should(q.add(null, 1)).be.true()
-    should(q.length).equal(1)
-    should(q.count()).equal(1)
-    should(q.add(null, 2)).be.true()
-    should(q.length).equal(2)
-    should(q.count()).equal(1)
-    should(q.add(null, 3)).be.false()
-    should(q.length).equal(2)
-    should(q.count()).equal(1)
+    st.equal(q.length, 0)
+    st.ok(q.add(null, 1))
+    st.equal(q.length, 1)
+    st.equal(q.count(), 1)
+    st.ok(q.add(null, 2))
+    st.equal(q.length, 2)
+    st.equal(q.count(), 1)
+    st.notOk(q.add(null, 3))
+    st.equal(q.length, 2)
+    st.equal(q.count(), 1)
     q.stop()
+    st.end()
   })
 
-  it('remove returns boolean', () => {
+  t.test('remove returns boolean', st => {
     var q = new Queue()
-    should(q.add(null)).be.true()
-    should(q.remove(null)).be.true()
-    should(q.remove(null)).be.false()
-    should(q.length).equal(1)
-    should(q.count()).equal(0)
-    should(q.add(null, 3)).be.true()
-    should(q.count()).equal(1)
-    should(q.remove(null)).be.true()
-    should(q.length).equal(3)
-    should(q.count()).equal(0)
+    st.ok(q.add(null))
+    st.ok(q.remove(null))
+    st.notOk(q.remove(null))
+    st.equal(q.length, 1)
+    st.equal(q.count(), 0)
+    st.ok(q.add(null, 3))
+    st.equal(q.count(), 1)
+    st.ok(q.remove(null))
+    st.equal(q.length, 3)
+    st.equal(q.count(), 0)
     q.stop()
+    st.end()
   })
 
-  it('remove to auto stop', () => {
+  t.test('remove to auto stop', st => {
     var q = new Queue()
-    should(q.add(1)).be.true()
-    should(q.add(2)).be.true()
-    should(q._timer).be.ok()
-    should(q.remove(2)).be.true()
-    should(q.remove(1)).be.true()
-    should(q._timer).be.undefined()
+    st.ok(q.add(1))
+    st.ok(q.add(2))
+    st.ok(q._timer)
+    st.ok(q.remove(2))
+    st.ok(q.remove(1))
+    st.equal(q._timer, undefined)
+    st.end()
   })
 })
