@@ -1,6 +1,6 @@
 {
   "name": "tickque",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "auto shifting queue based on denque",
   "main": "index.js",
   "scripts": {
@@ -18,7 +18,7 @@
     "url": "https://github.com/clarkttfu/tickque.git"
   },
   "devDependencies": {
-    "nyc": "^13.1.0",
+    "nyc": "^15.1.0",
     "tap-nyc": "^1.0.3",
     "tape": "^5.5.3"
   },
